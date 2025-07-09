@@ -15,68 +15,38 @@ Press Ctrl-C on the command line or send a signal to the process to stop the
 bot.
 """
 
-import logging
 import os
+import random
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-from dotenv import load_dotenv
-from telegram import ForceReply, Update
-from telegram.ext import Application, ContextTypes
-
-# Enable logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-# set higher logging level for httpx to avoid all GET and POST requests being logged
-logging.getLogger("httpx").setLevel(logging.WARNING)
-
-logger = logging.getLogger(__name__)
-
-
-# Define a few command handlers. These usually take the two arguments update and
-# context.
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /start is issued."""
-    user = update.effective_user
-    await update.message.reply_html(
-        rf"Hi {user.mention_html()}!",
-        reply_markup=ForceReply(selective=True),
+# Команда /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "Привет! 🎲 Я бот для DnD. Используй команду /roll, чтобы бросить кубик.\nПример: /roll 1d20"
     )
 
+# Команда /roll
+async def roll(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Используй формат: /roll 1d20 или /roll 2d6")
+        return
+    try:
+        count, die = context.args[0].lower().split('d')
+        count = int(count)
+        die = int(die)
+        rolls = [random.randint(1, die) for _ in range(count)]
+        await update.message.reply_text(f'🎲 Результат: {rolls} (сумма: {sum(rolls)})')
+    except Exception as e:
+        await update.message.reply_text("Ошибка. Пример: /roll 2d6")
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /help is issued."""
-    await update.message.reply_text("Help!")
+# Основной запуск бота
+if __name__ == '__main__':
+    token = os.environ["BOT_TOKEN"]
+    app = ApplicationBuilder().token(token).build()
 
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("roll", roll))
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Echo the user message."""
-    await update.message.reply_text(update.message.text)
-
-
-if __name__ == "__main__":
-    load_dotenv()
-    token = os.environ["TELEGRAM_BOT_TOKEN"]
-    dev_mode = os.environ.get("DEV_MODE", "False").lower() == "True"
-
-    application = Application.builder().token(token).build()
-
-    if dev_mode:
-        # Webhook settings
-        webhook_url = os.environ.get("WEBHOOK_URL")
-        port = int(os.environ.get("PORT", 8443))
-
-        # Set webhook
-        application.bot.set_webhook(
-            url=f"{webhook_url}/{token}",
-            drop_pending_updates=True
-        )
-
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=port,
-            url_path=token,
-            webhook_url=f"{webhook_url}/{token}"
-        )
-    else:
-        application.run_polling()
-
+    print("🤖 Бот запущен!")
+    app.run_polling()
